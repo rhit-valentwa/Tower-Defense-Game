@@ -1,0 +1,180 @@
+<html>
+    <head>
+        <title id="page_title">[Lobby: </title>
+    </head>
+    <body>
+        <canvas id="canvas" width="800" height="600" style="border:1px solid #000000; image-rendering: -moz-crisp-edges; image-rendering: -webkit-crisp-edges; image-rendering: pixelated;">Your browser does not support the HTML canvas tag.</canvas>
+
+        {% load static %}
+       
+
+        <script src="{% static 'lib/data.js' %}"></script>
+        <script src="{% static 'lib/ui.js' %}"></script>
+        <script src="{% static 'lib/eventListeners.js' %}"></script>
+
+        <img id="background" src="{% static 'images/background.png' %}" style="display:none"></img>
+        <img id="foreground" src="{% static 'images/foreground.png' %}" style="display:none"></img>
+        <img id="tower" src="{% static 'images/tower.png' %}" style="display:none"></img>
+        <img id="balloon" src="{% static 'images/balloon.png' %}" style="display:none"></img>
+
+        <script>
+
+            let gameID = '';
+
+            const socket = new WebSocket('ws://' + window.location.host + '/ws/play');
+
+            socket.onclose = function(e) {
+                console.error('Socket closed unexpectedly');
+            };
+
+            const pack = [];
+
+            setTimeout(function(){
+                setInterval(function(){
+                    socket.send(JSON.stringify({'type':'getData'}));
+                }, 16.33);
+            }, 1000);
+
+            const WIDTH = 704;
+            const HEIGHT = 512;
+            const TILESIZE = 32;
+            const BULLET_SPEED = 0.2;
+            const POPPING_POWER = 1;
+            const SPAWN_TIME = 0.1;
+            let coins = 500;
+            let lives = 200;
+            let level = 0;
+            let balloonsLeftInRound = 0;
+            let selectedTower = {};
+            let selectedBalloon = 0;
+            let selectedTowerForUpgrade = [];
+            let balloonsUpgraded = [0,0,0,0,0,0,0,0,0];
+            let selectedBalloonForUpgrade = false;
+
+            let player = 0;
+
+
+            socket.onmessage = function(e) {
+                let data = JSON.parse(e.data);
+
+                switch(data.type) {
+                    case 'initalization':
+                        player = data.player;
+                        document.getElementById('page_title').innerHTML = '[Lobby: ' + data.lobby_number + '] [Player: ' + data.player + ']';
+                    break;
+                    case 'update':
+                        gameID = data.id;
+                        pack[0] = data.text[0];
+                        pack[1] = data.text[1];
+                        pack[2] = data.text[2];
+
+                        lives = data.text[3][0]
+                        level = data.text[3][1]
+                        coins = data.text[3][2]
+                    break;
+                    case 'foundTower':
+                        selectedTowerForUpgrade = data.text[0] !== '' ? data.text : [];
+                    break;
+                    case 'foundBalloon':
+                        selectedBalloonForUpgrade = false;
+                    break;
+                }
+            }
+		
+
+            let c = document.getElementById("canvas");
+            let ctx = c.getContext("2d");
+
+            ctx.imageSmoothingEnabled = false;
+
+            const images = {
+                background: document.getElementById("background"),
+                foreground: document.getElementById("foreground"),
+                tower: document.getElementById("tower"),
+                balloon: document.getElementById("balloon"),
+            };
+            
+            setInterval(function(){
+                if (lives === 0) {
+                    if (player === 1) {
+                        window.location.replace('https://www.elephant.se/database2.php?elephant_id=2606');
+                    }
+                    else {
+                        window.location.replace('https://www.npr.org/2022/06/14/1105031075/bronx-zoo-elephant-not-person-court-rulesother%20elephants');
+                    }
+                }
+            }, 3000)
+
+            function draw() {
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+                ctx.drawImage(images.background, 0, 0, images.background.width * 2, images.background.height * 2);
+
+                // Draws Balloons
+                for(let i in pack[0]) {
+                    let drawX = pack[0][i][0];
+                    let drawY = pack[0][i][1];           
+                    switch(pack[0][i][2]) {
+                        case 1: ctx.fillStyle = 'red'; break;
+                        case 2: ctx.fillStyle = 'blue'; break;
+                        case 3: ctx.fillStyle = 'green'; break;
+                        case 4: ctx.fillStyle = 'yellow'; break;
+                        case 5: ctx.fillStyle = 'purple'; break;
+                        case 6: ctx.fillStyle = 'purple'; break;
+                        case 7: ctx.fillStyle = 'pink'; break;
+                        default: ctx.fillStyle = 'gray'; break;
+                    }
+                    ctx.fillRect(drawX + 10, drawY + 2, 12, 2);
+                    ctx.fillRect(drawX + 8, drawY + 4, 16, 2);
+                    ctx.fillRect(drawX + 6, drawY + 6, 20, 2);
+                    ctx.fillRect(drawX + 4, drawY + 8, 24, 2);
+                    ctx.fillRect(drawX + 2, drawY + 10, 28, 12);
+                    ctx.fillRect(drawX + 4, drawY + 12, 24, 2);
+                    ctx.fillRect(drawX + 6, drawY + 14, 20, 2);
+                    ctx.fillRect(drawX + 6, drawY + 16, 24, 2);
+                    ctx.fillRect(drawX + 4, drawY + 22, 24, 4);
+                    ctx.fillRect(drawX + 4, drawY + 22, 24, 4);
+                    ctx.fillRect(drawX + 6, drawY + 26, 20, 4);
+                    ctx.fillRect(drawX + 8, drawY + 28, 16, 4);
+                    ctx.drawImage(images.balloon, drawX, drawY, images.balloon.width * 2, images.balloon.height * 2);
+                }
+
+                // Draws Towers
+                for(let i in pack[1]) {
+                    ctx.fillStyle = pack[1][i][2];
+                    ctx.fillRect(pack[1][i][0], pack[1][i][1] + 2, TILESIZE, TILESIZE - 2)
+                    ctx.drawImage(images.tower, pack[1][i][0], pack[1][i][1], images.tower.width * 2, images.tower.height * 2);
+                    ctx.lineWidth = 10;
+                    ctx.strokeStyle = 'brown';
+                    ctx.beginPath();
+                    ctx.moveTo(pack[1][i][3], pack[1][i][4]);
+                    ctx.lineTo(pack[1][i][5], pack[1][i][6]);
+                    ctx.stroke();
+                    ctx.lineWidth = 1;
+                }
+
+                // Draws Bullets
+                for(let i in pack[2]) {
+                    ctx.lineWidth = 1;
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0)';
+                    ctx.strokeRect(pack[2][i][0], pack[2][i][1], 3 * 2, 3 * 2);
+                    ctx.fillStyle = pack[2][i][2];
+                    ctx.fillRect(pack[2][i][0], pack[2][i][1], 3 * 2, 3 * 2);
+                    ctx.fill();
+                    ctx.stroke();
+                }
+
+                ctx.drawImage(images.foreground, 0, 0, images.foreground.width * 2, images.foreground.height * 2);
+
+                for (let y = 0; y < 16; y++) {
+                    for (let x = 0; x < 22; x++) {
+                        tile(x * TILESIZE, y * TILESIZE, TILESIZE, TILESIZE);
+                    }
+                }
+                drawUI(player);
+            }
+            setInterval(draw, 16.33);
+        </script>
+    </body>
+</html>
